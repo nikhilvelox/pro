@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # 1. Database Layer (PostgreSQL)
+  postgres-db:
+    image: postgres:16-alpine
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: microservices_db
+      POSTGRES_USER: prod_user
+      POSTGRES_PASSWORD: prod_secure_password_123
+    ports:
+      - "5432:5432"
+    volumes:
+      # Maps data directly to your physical Windows D Drive
+      - "D:/db-data:/var/lib/postgresql/data"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prod_user -d microservices_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservice-network
+    restart: always
+
+  # 2. Application Layer (Spring Boot + Flyway + Eureka Client)
+  spring-boot-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spring-boot-app
+    ports:
+      - "8080:8080"
+    environment:
+      # Database connection configurations
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres-db:5432/microservices_db
+      SPRING_DATASOURCE_USERNAME: prod_user
+      SPRING_DATASOURCE_PASSWORD: prod_secure_password_123
+
+      # Flyway configurations
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+
+      # External Eureka Server configuration
+      # NOTE: Replace "host.docker.internal" with your actual Eureka Server IP address if it is running on a different machine.
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://docker.internal
+      SPRING_APPLICATION_NAME: my-spring-boot-service
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    networks:
+      - microservice-network
+    restart: always
+
+networks:
+  microservice-network:
+    driver: bridge
